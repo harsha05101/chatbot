@@ -1,6 +1,60 @@
 import { useState, useRef } from "react";
 import API from "../services/api";
 import { isGreeting } from "../utils/greetings";
+import React, { useState } from 'react';
+import API from '../services/api';
+
+function MessageInput({ onSendMessage }) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const userMessage = input;
+    setInput('');
+    setLoading(true);
+
+    // Render user message immediately (LEFT side bubble)
+    onSendMessage({ text: userMessage, sender: 'user' });
+
+    try {
+      const response = await API.post('/analyze', { message: userMessage });
+      
+      // Render bot response (RIGHT side bubble)
+      onSendMessage({
+        text: response.data.explanation,
+        sender: 'bot'
+      });
+    } catch (error) {
+      console.error('API Request Error:', error);
+      onSendMessage({
+        text: 'Unable to connect to PhishGuard AI server. Please check your network connection.',
+        sender: 'bot'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form className="message-input" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Type a message or paste a URL to analyze..."
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        disabled={loading}
+      />
+      <button type="submit" disabled={loading}>
+        {loading ? '...' : '➔'}
+      </button>
+    </form>
+  );
+}
+
+export default MessageInput;
 
 function MessageInput({ setMessages }) {
   const [input, setInput] = useState("");

@@ -12,15 +12,17 @@ from ocr import OCRProcessor
 from database import init_db, save_scan
 
 app = Flask(__name__)
-CORS(app)
+
+# Allow cross-origin requests from all domains/ports
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Initialize Database & Engine
 init_db()
 similarity_engine = SimilarityEngine()
 
-# Initialize Gemini Client
-api_key = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_KEY")
-client = genai.Client(api_key=api_key)
+# Initialize Gemini Client cleanly from environment variables
+api_key = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key) if api_key else None
 
 
 @app.route('/', methods=['GET'])
@@ -43,7 +45,7 @@ def analyze():
             "explanation": "Please enter a valid message, email, or URL to analyze."
         })
 
-    # 1. NLP Pipeline Execution
+    # 1. Pipeline Execution
     entities = TextPreprocessor.extract_entities(text)
     features = FeatureExtractor.extract(text)
 
@@ -62,20 +64,22 @@ def analyze():
 
     # 4. Gemini Deep AI Analysis & Response Generation
     try:
+        if not client:
+            raise ValueError("GEMINI_API_KEY environment variable not set.")
+
         prompt = f"""
-        You are PhishGuard AI, a top cybersecurity analyst. Analyze the following content and the rule engine findings to provide a concise, user-friendly security assessment.
+        You are PhishGuard AI, a top cybersecurity analyst. Analyze the following content and findings to provide a concise, user-friendly security assessment.
 
         --- PIPELINE FINDINGS ---
         Content Analyzed: "{text}"
         Calculated Risk Score: {rule_res['score']}/100 ({rule_res['level']} Risk)
         Scam Category Match: {match_res['category']}
         Detected Risk Factors: {', '.join(combined_reasons) if combined_reasons else 'None'}
-        Extracted Entities: URLs: {entities.get('urls', [])}, Emails: {entities.get('emails', [])}, Phone Numbers: {entities.get('phones', [])}
 
         --- INSTRUCTIONS ---
-        1. Explain WHY this message is safe or dangerous in 2 short bullet points based on indicators (urgency, domain legitimacy, reward traps, impersonation).
+        1. Explain WHY this message is safe or dangerous in 2 short bullet points.
         2. Provide 2 clear, practical action steps for the user to stay safe.
-        3. Keep the tone helpful, professional, and clear. Do not wrap in markdown codeblocks.
+        3. Keep the response concise, clear, and direct without wrapping in codeblocks.
         """
 
         response = client.models.generate_content(
@@ -86,11 +90,11 @@ def analyze():
     except Exception as e:
         print(f"Gemini API Error: {e}")
         gemini_response = (
-            "• This message was evaluated using rule-based pattern detection.\n"
-            "• Exercise caution if it requests sensitive personal details, passwords, or immediate payments."
+            "• Evaluated using rule-based pattern analysis.\n"
+            "• Please verify links and avoid sharing sensitive account information."
         )
 
-    # 5. Save History
+    # 5. Save Scan History
     save_scan(text, rule_res['score'], match_res['category'], match_res['similarity'])
 
     return jsonify({
@@ -102,15 +106,6 @@ def analyze():
         "explanation": gemini_response,
         "features": features
     })
-
-
-@app.route('/upload', methods=['POST'])
-def upload_ocr():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-    file = request.files['file']
-    text = OCRProcessor.extract_text(file.read())
-    return jsonify({"extracted_text": text})
 
 
 if __name__ == "__main__":
