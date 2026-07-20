@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// Create and export a configured Axios instance
 const API = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: 'https://phishguard-backend-53n8.onrender.com',
 });
 
 export default API;
