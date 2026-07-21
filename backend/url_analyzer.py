@@ -1,36 +1,49 @@
+# backend/url_analyzer.py
+import re
 from urllib.parse import urlparse
-from knowledge_base import KNOWLEDGE_BASE
 
-SUSPICIOUS_TLDS = {".xyz", ".top", ".club", ".online", ".site", ".info", ".biz", ".tk", ".ml"}
+HIGH_RISK_TLDS = ['.xyz', '.top', '.club', '.online', '.site', '.info', '.tk', '.ml', '.ga', '.work', '.vip']
+PROTECTED_BRANDS = ['paypal', 'google', 'apple', 'microsoft', 'amazon', 'netflix', 'wellsfargo', 'chase', 'bankofamerica', 'amrita']
 
 class URLAnalyzer:
     @staticmethod
-    def analyze(url_str):
-        if not url_str.startswith(("http://", "https://")):
-            url_str = "http://" + url_str
-            
-        parsed = urlparse(url_str)
+    def analyze(url: str) -> dict:
+        reasons = []
+        risk_score = 0
+        
+        # Ensure scheme for proper URL parsing
+        formatted_url = url if url.startswith(('http://', 'https://')) else f'http://{url}'
+        parsed = urlparse(formatted_url)
         domain = parsed.netloc.lower()
         
-        score = 0
-        reasons = []
+        # 1. Raw IP Address Check
+        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', domain):
+            risk_score += 45
+            reasons.append("Raw IP address used instead of a registered domain name.")
 
-        if not parsed.scheme == "https":
-            score += 15
-            reasons.append("Insecure HTTP protocol used")
+        # 2. High-Risk Disposable TLD Check
+        if any(domain.endswith(tld) for tld in HIGH_RISK_TLDS):
+            risk_score += 30
+            reasons.append("Domain utilizes a high-risk TLD often associated with disposable phishing sites.")
 
-        if any(domain.endswith(tld) for tld in SUSPICIOUS_TLDS):
-            score += 30
-            reasons.append("Domain uses suspicious TLD extension")
+        # 3. Brand Impersonation / Typosquatting Check
+        for brand in PROTECTED_BRANDS:
+            if brand in domain and not domain.endswith(f"{brand}.com") and not domain.endswith(f"{brand}.edu"):
+                risk_score += 40
+                reasons.append(f"Possible brand spoofing targeting '{brand}'.")
+                break
 
-        for key, info in KNOWLEDGE_BASE.items():
-            if key in domain:
-                if not any(domain.endswith(official) for official in info["official_domains"]):
-                    score += 40
-                    reasons.append(f"Impersonating brand {info['brand']} on fake domain")
+        # 4. Excessive Subdomains Check
+        if domain.count('.') > 3:
+            risk_score += 25
+            reasons.append("Excessive subdomain stacking detected to obscure actual destination.")
 
-        if domain.count(".") > 2:
-            score += 15
-            reasons.append("Excessive subdomains present")
+        # 5. Insecure Connection Check
+        if url.startswith('http://'):
+            risk_score += 15
+            reasons.append("Insecure connection (HTTP) used instead of encrypted HTTPS.")
 
-        return {"domain": domain, "risk_score": score, "reasons": reasons}
+        return {
+            "risk_score": min(risk_score, 100),
+            "reasons": reasons if reasons else ["No suspicious URL indicators found."]
+        }

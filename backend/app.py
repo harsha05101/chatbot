@@ -1,3 +1,4 @@
+# backend/app.py
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -14,14 +15,14 @@ from database import init_db, save_scan
 # Initialize Flask App
 app = Flask(__name__)
 
-# Allow cross-origin requests from all domains/ports
+# Enable Cross-Origin Resource Sharing
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Initialize Database & Engine
 init_db()
 similarity_engine = SimilarityEngine()
 
-# Initialize Gemini Client cleanly from environment variables
+# Initialize Gemini Client cleanly from environment variable
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key) if api_key else None
 
@@ -82,24 +83,36 @@ def analyze():
     match_res = similarity_engine.find_match(text)
     combined_reasons = rule_res["reasons"] + url_reasons
 
-    # 4. Gemini Deep AI Analysis & Response Generation
+    # 4. Gemini Deep AI Threat Intelligence Analysis
     try:
         if not client:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
 
         prompt = f"""
-        You are PhishGuard AI, a top cybersecurity analyst. Analyze the following content and findings to provide a concise, user-friendly security assessment.
+        You are PhishGuard AI, an elite cybersecurity threat intelligence analyst. 
 
-        --- PIPELINE FINDINGS ---
-        Content Analyzed: "{text}"
-        Calculated Risk Score: {rule_res['score']}/100 ({rule_res['level']} Risk)
-        Scam Category Match: {match_res['category']}
-        Detected Risk Factors: {', '.join(combined_reasons) if combined_reasons else 'None'}
+        Analyze the message below and synthesize the technical pipeline findings into a clear, professional security assessment.
 
-        --- INSTRUCTIONS ---
-        1. Explain WHY this message is safe or dangerous in 2 short bullet points.
-        2. Provide 2 clear, practical action steps for the user to stay safe.
-        3. Keep the response concise, clear, and direct without wrapping in codeblocks.
+        --- CONTENT FOR ANALYSIS ---
+        "{text}"
+
+        --- PIPELINE THREAT METRICS ---
+        Calculated Risk: {rule_res['score']}/100 ({rule_res['level']} Risk)
+        Matched Category: {match_res['category']}
+        Detected Anomalies: {', '.join(combined_reasons) if combined_reasons else 'None'}
+
+        --- RESPONSE FORMAT INSTRUCTIONS ---
+        Provide your assessment formatted EXACTLY as follows (no codeblock formatting, keep it clean):
+
+        🔍 **Threat Breakdown**: (In 2 concise sentences, state the tactic being used—e.g., social engineering, urgent action bias, brand impersonation, or fake credential check).
+
+        ⚠️ **Key Red Flags**:
+        • [Flag 1: Specific suspicious keyword, link pattern, or urgency tactic found in the content]
+        • [Flag 2: Another notable anomaly or lack of standard security practices]
+
+        🛡️ **Recommended Actions**:
+        1. [Action 1: Immediate step for the user]
+        2. [Action 2: Preventive step to protect their identity or account]
         """
 
         response = client.models.generate_content(
@@ -110,8 +123,13 @@ def analyze():
     except Exception as e:
         print(f"Gemini API Error: {e}")
         gemini_response = (
-            "• Evaluated using rule-based pattern analysis.\n"
-            "• Please verify links and avoid sharing sensitive account information."
+            "🔍 **Threat Breakdown**: Evaluated using rule-based pattern matching and heuristic detection.\n\n"
+            "⚠️ **Key Red Flags**:\n"
+            "• High-risk language or unverified URL structures detected.\n"
+            "• Unwanted solicitation or urgency prompt.\n\n"
+            "🛡️ **Recommended Actions**:\n"
+            "1. Do not click any links or provide personal credentials.\n"
+            "2. Verify through the official institution portal directly."
         )
 
     # 5. Save Scan History
