@@ -1,10 +1,12 @@
 import sqlite3
 import os
 
+# Store the database file in the same directory as this file
 DB_NAME = os.path.join(os.path.dirname(__file__), "scans.db")
 
+
 def init_db():
-    """Initializes the database table safely."""
+    """Initializes the SQLite scans table if it doesn't already exist."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
@@ -20,8 +22,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def save_scan(input_text, risk_score=0, category="Unknown", similarity=0.0):
-    """Saves scan metrics into SQLite."""
+    """Saves scan metrics into the SQLite scans database."""
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
