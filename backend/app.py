@@ -1,7 +1,7 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google import genai
-import os
 
 from preprocess import TextPreprocessor
 from feature_extractor import FeatureExtractor
@@ -11,6 +11,7 @@ from url_analyzer import URLAnalyzer
 from ocr import OCRProcessor
 from database import init_db, save_scan
 
+# Initialize Flask App
 app = Flask(__name__)
 
 # Allow cross-origin requests from all domains/ports
@@ -28,6 +29,25 @@ client = genai.Client(api_key=api_key) if api_key else None
 @app.route('/', methods=['GET'])
 def home():
     return "PhishGuard AI Backend Running Successfully!"
+
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No image file uploaded'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    try:
+        image_bytes = file.read()
+        extracted_text = OCRProcessor.extract_text(image_bytes)
+
+        return jsonify({'extracted_text': extracted_text})
+    except Exception as e:
+        print(f"Upload Endpoint Error: {e}")
+        return jsonify({'error': 'Failed to process image'}), 500
 
 
 @app.route('/analyze', methods=['POST'])
