@@ -1,28 +1,39 @@
-import io
 import os
-import shutil
+import io
 from PIL import Image
-import pytesseract
-
-# Path to the Tesseract executable on Windows
-tesseract_win_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-if os.name == 'nt' and os.path.exists(tesseract_win_path):
-    pytesseract.pytesseract.tesseract_cmd = tesseract_win_path
-elif shutil.which("tesseract"):
-    pytesseract.pytesseract.tesseract_cmd = shutil.which("tesseract")
-
+from google import genai
 
 class OCRProcessor:
-
     @staticmethod
-    def extract_text(image_bytes: bytes) -> str:
+    def extract_text(image_bytes):
         try:
-            img = Image.open(io.BytesIO(image_bytes))
-            if img.mode not in ('L', 'RGB'):
-                img = img.convert('RGB')
-            text = pytesseract.image_to_string(img)
-            return text.strip()
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                print("Error: Gemini API Key not found for OCR.")
+                return ""
+
+            # Initialize Gemini Client
+            client = genai.Client(api_key=api_key)
+            
+            # Load the image using Pillow
+            image = Image.open(io.BytesIO(image_bytes))
+
+            # Prompt Gemini to extract the text
+            response = client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=[
+                    "You are an OCR engine. Extract all the text from this image exactly as it appears. If there is no legible text, reply with exactly 'NO_TEXT_FOUND'.", 
+                    image
+                ]
+            )
+            
+            extracted_text = response.text.strip()
+            
+            if "NO_TEXT_FOUND" in extracted_text:
+                return ""
+                
+            return extracted_text
+            
         except Exception as e:
-            print(f"[OCR Error]: {e}")
+            print(f"Vision OCR Error: {e}")
             return ""
